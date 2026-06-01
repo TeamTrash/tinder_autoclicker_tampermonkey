@@ -2,6 +2,7 @@
 // @name         Auto Like / Nope Pro Floating
 // @namespace    http://tampermonkey.net/
 // @version      1.6
+// @match       https://tinder.com/*
 // @description  Auto Like con panel flotante, minimizable y contador
 // @match        *://*/*
 // @grant        none
