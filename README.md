@@ -14,3 +14,6 @@ Características:
 - Botón Iniciar / Detener.
 - Consola de depuración.
 - Sin alertas emergentes.
+
+# Descarga
+- El programa los pueden descargar desde https://www.tampermonkey.net/
