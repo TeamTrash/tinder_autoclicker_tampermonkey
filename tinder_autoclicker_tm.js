@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Auto Like / Nope Pro Debug
+// @name         Auto Like / Nope Pro Floating
 // @namespace    http://tampermonkey.net/
-// @version      1.5
-// @description  Auto Like con porcentaje configurable, contador, estado y sitio permitido
+// @version      1.6
+// @description  Auto Like con panel flotante, minimizable y contador
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -16,20 +16,17 @@
     ];
 
     if (!SITIOS_PERMITIDOS.some(site => window.location.hostname.includes(site))) {
-        console.log('[AutoLikeNope] Sitio no permitido:', window.location.hostname);
         return;
     }
 
-    console.log('[AutoLikeNope] Script cargado en:', window.location.hostname);
-
     let intervalId = null;
     let ejecutando = false;
-
     let likes = 0;
     let nopes = 0;
     let contador = 0;
 
     const panel = document.createElement('div');
+    panel.id = 'tm-panel';
 
     panel.style.position = 'fixed';
     panel.style.bottom = '20px';
@@ -37,64 +34,106 @@
     panel.style.zIndex = '999999';
     panel.style.background = '#222';
     panel.style.color = '#fff';
-    panel.style.padding = '15px';
     panel.style.borderRadius = '10px';
     panel.style.boxShadow = '0 0 10px rgba(0,0,0,.5)';
     panel.style.fontFamily = 'Arial, sans-serif';
-    panel.style.minWidth = '230px';
+    panel.style.minWidth = '240px';
+    panel.style.overflow = 'hidden';
 
     panel.innerHTML = `
-        <div style="font-size:16px;font-weight:bold;margin-bottom:12px;text-align:center;color:#4CAF50;">
-            Auto Like / Nope
+        <div id="tm-header"
+            style="background:#111;padding:8px 10px;cursor:move;display:flex;justify-content:space-between;align-items:center;">
+            <strong style="color:#4CAF50;">Auto Like / Nope</strong>
+
+            <div>
+                <button id="tm-minimize"
+                    style="background:#444;color:white;border:none;border-radius:4px;padding:2px 7px;cursor:pointer;">
+                    –
+                </button>
+            </div>
         </div>
 
-        <div style="margin-bottom:10px;">
-            <label style="display:block;margin-bottom:4px;font-weight:bold;">
-                Cantidad de clics
-            </label>
-            <input id="tm-maxclicks" type="number" value="50" min="1" placeholder="Ej: 100"
-                style="width:130px;padding:6px;border:1px solid #666;border-radius:4px;background:#fff;color:#000;font-size:14px;">
-        </div>
+        <div id="tm-content" style="padding:15px;">
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:4px;font-weight:bold;">
+                    Cantidad de clics
+                </label>
+                <input id="tm-maxclicks" type="number" value="50" min="1" placeholder="Ej: 100"
+                    style="width:130px;padding:6px;border:1px solid #666;border-radius:4px;background:#fff;color:#000;font-size:14px;">
+            </div>
 
-        <div style="margin-bottom:10px;">
-            <label style="display:block;margin-bottom:4px;font-weight:bold;">
-                Porcentaje Nope (%)
-            </label>
-            <input id="tm-nope" type="number" value="25" min="0" max="100" placeholder="Ej: 25"
-                style="width:130px;padding:6px;border:1px solid #666;border-radius:4px;background:#fff;color:#000;font-size:14px;">
-        </div>
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:4px;font-weight:bold;">
+                    Porcentaje Nope (%)
+                </label>
+                <input id="tm-nope" type="number" value="25" min="0" max="100" placeholder="Ej: 25"
+                    style="width:130px;padding:6px;border:1px solid #666;border-radius:4px;background:#fff;color:#000;font-size:14px;">
+            </div>
 
-        <div id="tm-frecuencia" style="margin-bottom:12px;font-size:13px;color:#FFD54F;">
-            Frecuencia: 1 Nope cada 4 clics
-        </div>
+            <div id="tm-frecuencia" style="margin-bottom:12px;font-size:13px;color:#FFD54F;">
+                Frecuencia: 1 Nope cada 4 clics
+            </div>
 
-        <div id="tm-status"
-            style="margin-bottom:12px;padding:8px;background:#2b2b2b;border-radius:5px;font-size:12px;color:#81C784;min-height:18px;">
-            Esperando...
-        </div>
+            <div id="tm-status"
+                style="margin-bottom:12px;padding:8px;background:#2b2b2b;border-radius:5px;font-size:12px;color:#81C784;min-height:18px;">
+                Esperando...
+            </div>
 
-        <div style="margin-bottom:12px;padding:8px;background:#333;border-radius:5px;font-size:13px;">
-            <strong>Progreso</strong><br>
-            Total: <span id="tm-total">0</span><br>
-            Likes: <span id="tm-likes">0</span><br>
-            Nope: <span id="tm-nopes">0</span>
-        </div>
+            <div style="margin-bottom:12px;padding:8px;background:#333;border-radius:5px;font-size:13px;">
+                <strong>Progreso</strong><br>
+                Total: <span id="tm-total">0</span><br>
+                Likes: <span id="tm-likes">0</span><br>
+                Nope: <span id="tm-nopes">0</span>
+            </div>
 
-        <button id="tm-start"
-            style="width:100%;padding:10px;background:#28a745;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">
-            Iniciar
-        </button>
+            <button id="tm-start"
+                style="width:100%;padding:10px;background:#28a745;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">
+                Iniciar
+            </button>
+        </div>
     `;
 
     document.body.appendChild(panel);
 
+    const header = document.getElementById('tm-header');
+    const content = document.getElementById('tm-content');
+    const minimizeBtn = document.getElementById('tm-minimize');
     const btnControl = document.getElementById('tm-start');
     const inputNope = document.getElementById('tm-nope');
+
+    let minimizado = false;
+
+    minimizeBtn.addEventListener('click', () => {
+        minimizado = !minimizado;
+        content.style.display = minimizado ? 'none' : 'block';
+        minimizeBtn.innerText = minimizado ? '+' : '–';
+    });
+
+    let isDragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    header.addEventListener('mousedown', function (e) {
+        isDragging = true;
+        offsetX = e.clientX - panel.getBoundingClientRect().left;
+        offsetY = e.clientY - panel.getBoundingClientRect().top;
+        panel.style.bottom = 'auto';
+        panel.style.right = 'auto';
+    });
+
+    document.addEventListener('mousemove', function (e) {
+        if (!isDragging) return;
+        panel.style.left = `${e.clientX - offsetX}px`;
+        panel.style.top = `${e.clientY - offsetY}px`;
+    });
+
+    document.addEventListener('mouseup', function () {
+        isDragging = false;
+    });
 
     function setStatus(texto, color = '#81C784') {
         const status = document.getElementById('tm-status');
         if (!status) return;
-
         status.innerText = texto;
         status.style.color = color;
     }
@@ -102,15 +141,12 @@
     function actualizarFrecuencia() {
         const porcentaje = parseInt(inputNope.value) || 0;
 
-        let texto = '';
-
         if (porcentaje <= 0) {
-            texto = 'Frecuencia: Sin Nope';
+            document.getElementById('tm-frecuencia').innerText = 'Frecuencia: Sin Nope';
         } else {
-            texto = `Frecuencia: 1 Nope cada ${Math.round(100 / porcentaje)} clics`;
+            document.getElementById('tm-frecuencia').innerText =
+                `Frecuencia: 1 Nope cada ${Math.round(100 / porcentaje)} clics`;
         }
-
-        document.getElementById('tm-frecuencia').innerText = texto;
     }
 
     inputNope.addEventListener('input', actualizarFrecuencia);
@@ -127,39 +163,27 @@
         let btnLike = null;
         let btnNope = null;
 
-        console.log('[AutoLikeNope] Wrappers encontrados:', wrappers.length);
-
         for (const wrapper of wrappers) {
             const button = wrapper.querySelector('button');
-
             if (!button) continue;
 
             const html = button.innerHTML;
             const htmlLower = html.toLowerCase();
 
-            if (
-                html.includes('Like') &&
-                !html.includes('Super Like')
-            ) {
+            if (html.includes('Like') && !html.includes('Super Like')) {
                 btnLike = button;
-                console.log('[AutoLikeNope] Botón Like encontrado');
             }
 
             if (htmlLower.includes('nope')) {
                 btnNope = button;
-                console.log('[AutoLikeNope] Botón Nope encontrado');
             }
         }
 
-        return {
-            btnLike,
-            btnNope
-        };
+        return { btnLike, btnNope };
     }
 
     function detener(mensaje = 'Detenido') {
         clearInterval(intervalId);
-
         intervalId = null;
         ejecutando = false;
 
@@ -167,40 +191,26 @@
         btnControl.style.background = '#28a745';
 
         setStatus(mensaje);
-        console.log('[AutoLikeNope]', mensaje);
     }
 
     function iniciar() {
         const maxClicks = parseInt(document.getElementById('tm-maxclicks').value);
         const porcentajeNope = parseInt(document.getElementById('tm-nope').value);
 
-        console.log('[AutoLikeNope] Intentando iniciar');
-        console.log('[AutoLikeNope] maxClicks:', maxClicks);
-        console.log('[AutoLikeNope] porcentajeNope:', porcentajeNope);
-
         if (!maxClicks || maxClicks <= 0) {
-            setStatus('Cantidad de clics inválida', '#ff8080');
-            console.warn('[AutoLikeNope] Cantidad de clics inválida');
+            setStatus('Cantidad inválida', '#ff8080');
             return;
         }
 
-        if (
-            porcentajeNope < 0 ||
-            porcentajeNope > 100 ||
-            isNaN(porcentajeNope)
-        ) {
-            setStatus('Porcentaje Nope inválido', '#ff8080');
-            console.warn('[AutoLikeNope] Porcentaje Nope inválido');
+        if (porcentajeNope < 0 || porcentajeNope > 100 || isNaN(porcentajeNope)) {
+            setStatus('Porcentaje inválido', '#ff8080');
             return;
         }
 
         const { btnLike, btnNope } = buscarBotones();
 
         if (!btnLike || !btnNope) {
-            setStatus('No se encontraron botones', '#ff8080');
-            console.warn('[AutoLikeNope] No se encontraron botones');
-            console.log('[AutoLikeNope] btnLike:', btnLike);
-            console.log('[AutoLikeNope] btnNope:', btnNope);
+            setStatus('Botones no encontrados', '#ff8080');
             return;
         }
 
@@ -210,22 +220,15 @@
 
         actualizarContador();
 
-        let frecuenciaNope = 0;
-
-        if (porcentajeNope > 0) {
-            frecuenciaNope = Math.round(100 / porcentajeNope);
-        }
+        const frecuenciaNope = porcentajeNope > 0
+            ? Math.round(100 / porcentajeNope)
+            : 0;
 
         ejecutando = true;
-
         btnControl.innerText = 'Detener';
         btnControl.style.background = '#dc3545';
 
         setStatus(`Ejecutando... ${porcentajeNope}% Nope`);
-
-        console.log(
-            `[AutoLikeNope] Iniciado | Clicks=${maxClicks} | Nope=${porcentajeNope}% | Frecuencia=${frecuenciaNope}`
-        );
 
         intervalId = setInterval(() => {
             if (contador >= maxClicks) {
@@ -238,7 +241,6 @@
             if (!botones.btnLike || !botones.btnNope) {
                 detener('Botones no encontrados');
                 setStatus('Botones no encontrados', '#ff8080');
-                console.warn('[AutoLikeNope] Botones desaparecieron durante la ejecución');
                 return;
             }
 
@@ -251,11 +253,9 @@
             ) {
                 botones.btnNope.click();
                 nopes++;
-                console.log(`[AutoLikeNope] [${contador}/${maxClicks}] NOPE`);
             } else {
                 botones.btnLike.click();
                 likes++;
-                console.log(`[AutoLikeNope] [${contador}/${maxClicks}] LIKE`);
             }
 
             actualizarContador();
@@ -264,11 +264,7 @@
     }
 
     btnControl.addEventListener('click', () => {
-        if (ejecutando) {
-            detener('Detenido manualmente');
-        } else {
-            iniciar();
-        }
+        ejecutando ? detener('Detenido manualmente') : iniciar();
     });
 
     actualizarFrecuencia();
